@@ -84,9 +84,8 @@ class Base:
 
     @staticmethod
     def load_csv_from_zip(_zip, csv_file):
-        df = pd.read_csv(_zip.open(csv_file),
+        return pd.read_csv(_zip.open(csv_file),
                          encoding='unicode_escape', low_memory=False)
-        return df
 
     @staticmethod
     def pickle_exist(pickle_file):
@@ -127,16 +126,14 @@ class Base:
         if not os.path.exists(self.pickle_file):
             filepath, _, _ = self. file_parts(self.pickle_file)
             Path(filepath).mkdir(parents=True, exist_ok=True)
-        output_pickle = open(self.pickle_file, "wb")
-        cPickle.dump(self, output_pickle)
-        output_pickle.close()
+        with open(self.pickle_file, "wb") as output_pickle:
+            cPickle.dump(self, output_pickle)
 
     def load_pickle(self):
-        input_pickle = open(self.pickle_file, 'rb')
-        data = cPickle.load(input_pickle)
-        for domain in self.domains:
-            setattr(self, domain, getattr(data, domain))
-        input_pickle.close()
+        with open(self.pickle_file, 'rb') as input_pickle:
+            data = cPickle.load(input_pickle)
+            for domain in self.domains:
+                setattr(self, domain, getattr(data, domain))
 
 
 @dataclass
@@ -376,7 +373,7 @@ class PreProcess(Base):
         if any(idx):
             values = list(_type.code.values[idx])
             key = list(np.where(idx)[0])
-            for key, val in dict(zip(key[0:-1], values[0:-1])).items():
+            for key, val in dict(zip(key[:-1], values[:-1])).items():
                 df.type[df.type == val] = values[-1]
                 _type = _type.drop(key)
         df = self.remap_cat('type', self.map(
@@ -424,8 +421,12 @@ class PreProcess(Base):
             if subset.shape[0] > 1:
                 ix = [i for _, i in np.argwhere(subset.set_index('datetimeObserved')
                                                 .sort_index().iloc[:, 2::].values)]
-                df = pd.get_dummies(np.ravel_multi_index(
-                    [ix[0:-1], ix[1::]], (len(nodes), len(nodes))))
+                df = pd.get_dummies(
+                    np.ravel_multi_index(
+                        [ix[:-1], ix[1::]], (len(nodes), len(nodes))
+                    )
+                )
+
                 df = df.rename(columns=dict(zip(df.columns, cols)))
                 df = subset.reset_index(
                 )[["datetimeObserved"]].diff().shift(-1).join(df)
